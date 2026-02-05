@@ -62,6 +62,8 @@ const resources = {
             "error_missing_fields": "Please enter Field Area and Fertilizer Rate first.",
             "top_confidence": "Top Confidence",
             "prediction_results": "Prediction Results",
+            "download_report": "Download Report PDF",
+            "generating_pdf": "Generating...",
 
             "research_title": "Model Architecture & Research",
             "research_subtitle": "Technical details of our Axial Attention Transformer for hyperspectral wheat phenotyping.",
@@ -221,6 +223,8 @@ const resources = {
             "error_missing_fields": "कृपया पहले खेत क्षेत्र और उर्वरक दर दर्ज करें।",
             "top_confidence": "शीर्ष आत्मविश्वास",
             "prediction_results": "भविष्यवाणी के परिणाम",
+            "download_report": "रिपोर्ट पीडीएफ डाउनलोड करें",
+            "generating_pdf": "उत्पन्न हो रहा है...",
 
             "research_title": "मॉडल आर्किटेक्चर और अनुसंधान",
             "research_subtitle": "हाइपरस्पेक्ट्रल गेहूं फेनोटाइपिंग के लिए हमारे एक्सियल अटेंशन ट्रांसफॉर्मर का तकनीकी विवरण।",

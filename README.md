@@ -6,6 +6,39 @@ It analyzes hyperspectral images of wheat leaves to predict critical physiologic
 
 ---
 
+## 📸 Gallery
+
+### 🏠 Home Page
+<p align="center">
+  <img src="hyperleaf-ai/screenshots/home_page_1.png" width="48%" />
+  <img src="hyperleaf-ai/screenshots/home_page_2.png" width="48%" />
+  <img src="hyperleaf-ai/screenshots/home_page_3.png" width="32%" />
+  <img src="hyperleaf-ai/screenshots/home_page_4.png" width="32%" />
+  <img src="hyperleaf-ai/screenshots/home_page_5.png" width="32%" />
+</p>
+
+### 🔐 Authentication
+<p align="center">
+  <img src="hyperleaf-ai/screenshots/Login_page.png" width="80%" />
+</p>
+
+### 🔬 Analysis & Prediction
+<p align="center">
+  <img src="hyperleaf-ai/screenshots/Analyze_page_1.png" width="48%" />
+  <img src="hyperleaf-ai/screenshots/Analyze_page_2.png" width="48%" />
+  <img src="hyperleaf-ai/screenshots/Analyze_page_3.png" width="32%" />
+  <img src="hyperleaf-ai/screenshots/Analyze_page_4.png" width="32%" />
+  <img src="hyperleaf-ai/screenshots/Analyze_page_5.png" width="32%" />
+</p>
+
+### 📊 Dashboard & Reports
+<p align="center">
+  <img src="hyperleaf-ai/screenshots/Dashboard_1.png" width="48%" />
+  <img src="hyperleaf-ai/screenshots/Dashboard_2.png" width="48%" />
+</p>
+
+---
+
 ## 🚀 Key Features
 
 *   **🧠 Advanced AI Model**: Powered by a custom **FusionNet** architecture (1D+2D CNN + Axial Attention) to process complex spectral data.
