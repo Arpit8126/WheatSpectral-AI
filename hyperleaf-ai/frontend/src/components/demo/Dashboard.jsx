@@ -4,10 +4,11 @@ import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     BarChart, Bar, Cell
 } from 'recharts';
-import { AlertCircle, Check, Download } from 'lucide-react';
+import { AlertCircle, Check, Download, TrendingUp, MapPin, Loader2, IndianRupee } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { generatePDF } from '@/lib/pdfGenerator';
+import api from '../../services/api';
 
 const COLORS = ['#b09e5a', '#4ade80', '#60a5fa', '#f472b6'];
 
@@ -15,6 +16,11 @@ const Dashboard = ({ results }) => {
     const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState('report');
     const [isDownloading, setIsDownloading] = useState(false);
+
+    // Market Linkage State
+    const [marketStrategy, setMarketStrategy] = useState(null);
+    const [loadingMarket, setLoadingMarket] = useState(false);
+    const [marketError, setMarketError] = useState(null);
 
     // Support both old and new response structures gracefully
     const spectralData = results.spectral_data ? results.spectral_data.map((val, idx) => ({
@@ -31,6 +37,7 @@ const Dashboard = ({ results }) => {
 
     const tabs = [
         { id: 'report', label: t('report_tab') },
+        { id: 'market', label: 'Market opportunities' },
         { id: 'classification', label: t('class_tab') },
         { id: 'regression', label: t('traits_tab') },
         { id: 'spectral', label: t('spectral_tab') },
@@ -43,8 +50,55 @@ const Dashboard = ({ results }) => {
 
     const handleDownload = async () => {
         setIsDownloading(true);
-        await generatePDF('pdf-report-content', `HyperLeaf_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+        // Pass array of IDs for multi-page PDF
+        await generatePDF(['pdf-page-1', 'pdf-page-2', 'pdf-page-3'], `WheatSpectral_Report_${new Date().toISOString().split('T')[0]}.pdf`);
         setIsDownloading(false);
+    };
+
+    const fetchMarketStrategy = async () => {
+        setLoadingMarket(true);
+        setMarketError(null);
+
+        if (!navigator.geolocation) {
+            setMarketError("Geolocation is not supported by your browser.");
+            setLoadingMarket(false);
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                try {
+                    const { latitude, longitude } = position.coords;
+
+                    // Create Form Data to send lat/lon
+                    const formData = new FormData();
+                    formData.append('lat', latitude);
+                    formData.append('lon', longitude);
+
+                    const res = await api.post(`/api/market/strategy?prediction_id=${results.id}`, formData);
+                    setMarketStrategy(res.data);
+                } catch (err) {
+                    console.error("Market API Error:", err);
+                    setMarketError("Failed to fetch market data. Please try again.");
+                } finally {
+                    setLoadingMarket(false);
+                }
+            },
+            async (error) => {
+                console.warn("Location permission denied or unavailable, using defaults.", error);
+
+                // Fallback call without location (Backend uses default)
+                try {
+                    const res = await api.post(`/api/market/strategy?prediction_id=${results.id}`);
+                    setMarketStrategy(res.data);
+                } catch (err) {
+                    console.error("Market API Error:", err);
+                    setMarketError("Failed to fetch market data.");
+                } finally {
+                    setLoadingMarket(false);
+                }
+            }
+        );
     };
 
     return (
@@ -74,7 +128,7 @@ const Dashboard = ({ results }) => {
 
             {/* Tabs & Download */}
             <div className="flex flex-wrap items-center justify-between border-b border-white/10 gap-4">
-                <div className="flex overflow-x-auto">
+                <div className="flex overflow-x-auto no-scrollbar">
                     {tabs.map(tab => (
                         <button
                             key={tab.id}
@@ -135,6 +189,101 @@ const Dashboard = ({ results }) => {
                     </motion.div>
                 )}
 
+                {activeTab === 'market' && (
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h4 className="font-bold text-xl text-white">Market Opportunities</h4>
+                                <p className="text-sm text-gray-400">Find the best mandi to sell your produce based on live Agmarknet prices.</p>
+                            </div>
+                            {!marketStrategy && (
+                                <button
+                                    onClick={fetchMarketStrategy}
+                                    disabled={loadingMarket}
+                                    className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg font-semibold transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-70 disabled:cursor-not-allowed"
+                                >
+                                    {loadingMarket ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
+                                    Find Best Mandi via GPS
+                                </button>
+                            )}
+                        </div>
+
+                        {marketError && (
+                            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 flex items-center gap-3 mb-6">
+                                <AlertCircle className="w-5 h-5" />
+                                <p>{marketError}</p>
+                            </div>
+                        )}
+
+                        {marketStrategy && (
+                            <div className="space-y-6">
+                                {/* Profit Highlight */}
+                                <div className="p-6 bg-gradient-to-r from-emerald-900/30 to-green-900/10 border border-emerald-500/30 rounded-2xl relative overflow-hidden">
+                                    <div className="relative z-10">
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <TrendingUp className="w-6 h-6 text-emerald-400" />
+                                            <h5 className="font-bold text-lg text-emerald-300">Recommended Strategy</h5>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-4">
+                                            <div>
+                                                <p className="text-gray-400 text-sm">Best Mandi</p>
+                                                <p className="text-2xl font-bold text-white mt-1">{marketStrategy.recommended_market}</p>
+                                                <p className="text-emerald-400 mt-1 text-sm bg-emerald-900/40 inline-block px-2 py-0.5 rounded">
+                                                    ₹{marketStrategy.recommended_price}/q
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-gray-400 text-sm">Est. Net Profit</p>
+                                                <p className="text-3xl font-black text-white mt-1">₹{marketStrategy.net_profit?.toLocaleString()}</p>
+                                                <p className="text-gray-500 text-xs mt-1">After transport & input costs</p>
+                                            </div>
+                                        </div>
+                                        <p className="mt-6 text-gray-300 text-sm italic bg-black/20 p-3 rounded-lg border border-white/5">
+                                            "{marketStrategy.recommendation_text}"
+                                        </p>
+                                    </div>
+                                    <div className="absolute right-0 top-0 h-full w-1/3 bg-emerald-500/5 blur-3xl" />
+                                </div>
+
+                                {/* Comparison Table */}
+                                <div>
+                                    <h5 className="font-bold text-white mb-4">Nearby Alternative Markets</h5>
+                                    <div className="overflow-x-auto rounded-xl border border-white/10">
+                                        <table className="w-full text-left text-sm text-gray-400">
+                                            <thead className="bg-white/5 text-gray-200 uppercase text-xs font-bold">
+                                                <tr>
+                                                    <th className="px-4 py-3">Mandi / District</th>
+                                                    <th className="px-4 py-3">Distance</th>
+                                                    <th className="px-4 py-3 text-right">Price (/q)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-white/5">
+                                                {marketStrategy.alternative_markets?.slice(0, 5).map((m, i) => (
+                                                    <tr key={i} className="hover:bg-white/5 transition-colors">
+                                                        <td className="px-4 py-3">
+                                                            <div className="font-medium text-white">{m.market}</div>
+                                                            <div className="text-xs">{m.district}, {m.state}</div>
+                                                        </td>
+                                                        <td className="px-4 py-3">{m.distance_km} km</td>
+                                                        <td className="px-4 py-3 text-right font-bold text-green-400">₹{m.modal_price}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {!marketStrategy && !loadingMarket && (
+                            <div className="flex flex-col items-center justify-center py-12 text-gray-500 border-2 border-dashed border-white/10 rounded-xl">
+                                <IndianRupee className="w-12 h-12 mb-3 opacity-20" />
+                                <p>Click the button above to find the best selling price near you.</p>
+                            </div>
+                        )}
+                    </motion.div>
+                )}
+
                 {activeTab === 'classification' && (
                     <motion.div
                         initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -187,7 +336,7 @@ const Dashboard = ({ results }) => {
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={spectralData}>
                                 <defs>
-                                    <linearGradient id="colorSpectral" x1="0" y1="0" x2="0" y2="1">
+                                    <linearGradient id="colorSpectralPDF" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#4ade80" stopOpacity={0.8} />
                                         <stop offset="95%" stopColor="#4ade80" stopOpacity={0} />
                                     </linearGradient>
@@ -198,20 +347,20 @@ const Dashboard = ({ results }) => {
                                 <Tooltip
                                     contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' }}
                                 />
-                                <Area type="monotone" dataKey="value" stroke="#4ade80" fillOpacity={1} fill="url(#colorSpectral)" />
+                                <Area type="monotone" dataKey="value" stroke="#4ade80" fillOpacity={1} fill="url(#colorSpectralPDF)" isAnimationActive={false} />
                             </AreaChart>
                         </ResponsiveContainer>
                     </motion.div>
                 )}
             </div>
 
-            {/* Hidden PDF Template */}
-            <div id="pdf-report-content" className="fixed left-[-1000vw] top-0 w-[210mm] min-h-[297mm] bg-[#030712] text-white p-12 space-y-8 font-sans">
+            {/* Hidden PDF Template - PAGE 1 */}
+            <div id="pdf-page-1" className="fixed left-[-1000vw] top-0 w-[210mm] min-h-[297mm] bg-[#030712] text-white p-12 space-y-8 font-sans">
                 {/* PDF Header */}
                 <div className="flex justify-between items-center border-b border-white/20 pb-6">
                     <div>
-                        <h1 className="text-3xl font-bold text-green-400">HyperLeaf AI</h1>
-                        <p className="text-gray-400 text-sm mt-1">Hyperspectral Analysis Report</p>
+                        <h1 className="text-3xl font-bold text-green-400">WheatSpectral AI</h1>
+                        <p className="text-gray-400 text-sm mt-1">Hyperspectral Analysis Report (Page 1/2)</p>
                     </div>
                     <div className="text-right">
                         <p className="text-sm text-gray-500">Date</p>
@@ -276,22 +425,127 @@ const Dashboard = ({ results }) => {
                         ))}
                     </div>
                 </div>
+            </div>
 
-                {/* PDF Section 4: Graph */}
-                <div className="h-[300px]">
+            {/* Hidden PDF Template - PAGE 2 */}
+            <div id="pdf-page-2" className="fixed left-[-1000vw] top-0 w-[210mm] min-h-[297mm] bg-[#030712] text-white p-12 space-y-8 font-sans">
+                {/* PDF Header Page 2 */}
+                <div className="flex justify-between items-center border-b border-white/20 pb-6">
+                    <div>
+                        <h1 className="text-3xl font-bold text-green-400">WheatSpectral AI</h1>
+                        <p className="text-gray-400 text-sm mt-1">Hyperspectral Analysis Report (Page 2/2)</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-sm text-gray-500">Date</p>
+                        <p className="font-bold">{new Date().toLocaleDateString()}</p>
+                    </div>
+                </div>
+
+                {/* PDF Section 4: Market Strategy (If Available) */}
+                {(results.recommended_market || marketStrategy) ? (
+                    <div className="mb-8">
+                        <h3 className="text-xl font-bold text-white mb-4">Market Strategy & Profitability</h3>
+                        <div className="p-6 bg-white/5 rounded-xl border border-white/10">
+                            <div className="grid grid-cols-2 gap-8 mb-4">
+                                <div>
+                                    <p className="text-[10px] text-gray-400 uppercase">Recommended Mandi</p>
+                                    <p className="text-2xl font-bold text-white mt-1">
+                                        {results.recommended_market || marketStrategy?.recommended_market}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-gray-400 uppercase">Est. Net Profit</p>
+                                    <p className="text-2xl font-bold text-green-400 mt-1">
+                                        ₹{(results.net_profit || marketStrategy?.net_profit)?.toLocaleString()}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4 border-t border-white/10 pt-4">
+                                <div>
+                                    <p className="text-[10px] text-gray-400">Market Price</p>
+                                    <p className="font-semibold">₹{results.market_price || marketStrategy?.recommended_price}/q</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-gray-400">Transport Cost</p>
+                                    <p className="font-semibold">₹{(results.transport_cost || marketStrategy?.transport_cost)?.toFixed(0)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-gray-400">Distance</p>
+                                    <p className="font-semibold">{results.mandi_distance || "N/A"} km</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* PDF: Alternative Markets Table */}
+                        {(marketStrategy?.alternative_markets) && (
+                            <div className="mt-8">
+                                <h5 className="font-bold text-white mb-4">Nearby Alternative Markets</h5>
+                                <div className="rounded-xl border border-white/10 overflow-hidden">
+                                    <table className="w-full text-left text-sm text-gray-400">
+                                        <thead className="bg-white/5 text-gray-200 uppercase text-xs font-bold">
+                                            <tr>
+                                                <th className="px-4 py-3">Mandi / District</th>
+                                                <th className="px-4 py-3">Distance</th>
+                                                <th className="px-4 py-3 text-right">Price (/q)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5">
+                                            {marketStrategy.alternative_markets.slice(0, 8).map((m, i) => (
+                                                <tr key={i} className="border-b border-white/5 last:border-0">
+                                                    <td className="px-4 py-3 text-white">
+                                                        <span className="font-bold">{m.market}</span>
+                                                        <span className="block text-[10px] text-gray-500">{m.district}, {m.state}</span>
+                                                    </td>
+                                                    <td className="px-4 py-3">{m.distance_km} km</td>
+                                                    <td className="px-4 py-3 text-right font-bold text-green-400">₹{m.modal_price}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="p-6 bg-white/5 rounded-xl border border-white/10 text-center text-gray-500">
+                        <p>Market analysis data not available for this report.</p>
+                    </div>
+                )}
+            </div>
+
+            {/* Hidden PDF Template - PAGE 3 */}
+            <div id="pdf-page-3" className="fixed left-[-1000vw] top-0 w-[210mm] min-h-[297mm] bg-[#030712] text-white p-12 space-y-8 font-sans">
+                {/* PDF Header Page 3 */}
+                <div className="flex justify-between items-center border-b border-white/20 pb-6">
+                    <div>
+                        <h1 className="text-3xl font-bold text-green-400">WheatSpectral AI</h1>
+                        <p className="text-gray-400 text-sm mt-1">Hyperspectral Analysis Report (Page 3/3)</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-sm text-gray-500">Date</p>
+                        <p className="font-bold">{new Date().toLocaleDateString()}</p>
+                    </div>
+                </div>
+
+                {/* PDF Section 5: Graph */}
+                <div className="h-[500px]">
                     <h3 className="text-xl font-bold text-white mb-4">{t('spectral_tab')}</h3>
+                    <p className="text-gray-400 text-sm mb-6">
+                        This graph shows the spectral reflectance signature of the crop.
+                        Distinct features in the NIR region correlate with chlorophyll content and nitrogen levels.
+                    </p>
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={spectralData}>
                             <defs>
-                                <linearGradient id="colorSpectralPDF" x1="0" y1="0" x2="0" y2="1">
+                                <linearGradient id="colorSpectralPDF3" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="#4ade80" stopOpacity={0.8} />
                                     <stop offset="95%" stopColor="#4ade80" stopOpacity={0} />
                                 </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                            <XAxis dataKey="wavelength" stroke="#6b7280" fontSize={10} tickLine={false} />
-                            <YAxis stroke="#6b7280" fontSize={10} tickLine={false} />
-                            <Area type="monotone" dataKey="value" stroke="#4ade80" fillOpacity={1} fill="url(#colorSpectralPDF)" isAnimationActive={false} />
+                            <XAxis dataKey="wavelength" stroke="#6b7280" fontSize={10} tickLine={false} label={{ value: 'Wavelength (nm)', position: 'insideBottom', offset: -5, fill: '#6b7280' }} />
+                            <YAxis stroke="#6b7280" fontSize={10} tickLine={false} label={{ value: 'Reflectance', angle: -90, position: 'insideLeft', fill: '#6b7280' }} />
+                            <Area type="monotone" dataKey="value" stroke="#4ade80" fillOpacity={1} fill="url(#colorSpectralPDF3)" isAnimationActive={false} />
                         </AreaChart>
                     </ResponsiveContainer>
                 </div>

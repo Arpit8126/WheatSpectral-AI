@@ -42,6 +42,14 @@ class Prediction(Base):
     fertilizer_cost_inr = Column(Float)
     total_production_quintals = Column(Float)
     
+    # Market Linkage Data (Persisted)
+    recommended_market = Column(String, nullable=True)
+    market_price = Column(Float, nullable=True)     # Price per quintal
+    transport_cost = Column(Float, nullable=True)   # Total transport cost
+    net_profit = Column(Float, nullable=True)       # Estimated Net Profit
+    mandi_distance = Column(Float, nullable=True)   # Distance to recommended mandi
+    market_updated_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     owner = relationship("User", back_populates="predictions")

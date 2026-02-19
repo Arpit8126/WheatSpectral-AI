@@ -46,9 +46,40 @@ class PredictionResponse(BaseModel):
     total_production_quintals: float
     created_at: datetime
     
+    # Market Data (Optional as it might not be calculated yet)
+    recommended_market: Optional[str] = None
+    market_price: Optional[float] = None
+    transport_cost: Optional[float] = None
+    net_profit: Optional[float] = None
+    mandi_distance: Optional[float] = None
+    
     # Transient fields
     spectral_data: Optional[List[float]] = None
     cultivar_probs: Optional[List[float]] = None
 
     class Config:
         from_attributes = True
+
+# --- Market Linkage Schemas ---
+
+class MandiPrice(BaseModel):
+    state: str
+    district: str
+    market: str
+    commodity: str
+    variety: str
+    grade: str
+    min_price: float
+    max_price: float
+    modal_price: float
+    arrival_date: str
+    distance_km: Optional[float] = None  # Mocked distance from user
+
+class MarketStrategy(BaseModel):
+    recommended_market: str
+    recommended_price: float
+    total_revenue: float
+    transport_cost: float
+    net_profit: float
+    recommendation_text: str
+    alternative_markets: List[MandiPrice]

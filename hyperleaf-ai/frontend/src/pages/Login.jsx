@@ -32,7 +32,7 @@ const Login = () => {
                 </div>
 
                 <div className="relative z-20 text-white max-w-lg">
-                    <h1 className="text-5xl font-extrabold tracking-tight mb-6">HyperLeaf AI</h1>
+                    <h1 className="text-5xl font-extrabold tracking-tight mb-6">WheatSpectral AI</h1>
                     <p className="text-xl text-gray-300 mb-8 leading-relaxed">
                         {t('empowering_ag')}
                     </p>

@@ -8,14 +8,17 @@ import torch
 import torch.nn.functional as F
 import tifffile
 import os
+from datetime import datetime
 
 import models
 import schemas
 import auth
 from database import get_db
 from ai_model import FusionNet, preprocess_image, REG_MEAN, REG_STD, CULTIVAR_NAMES
+import prediction_service
+import market_service
 
-app = FastAPI(title="HyperLeaf AI API")
+app = FastAPI(title="WheatSpectral AI API")
 
 # CORS
 app.add_middleware(
@@ -29,6 +32,9 @@ app.add_middleware(
 # Include Auth Router
 app.include_router(auth.router)
 
+# Include WhatsApp Router
+# WhatsApp Router removed
+
 # --- Model Loading ---
 MODEL_PATH = "1D+2D CNN + Axial Attention.pt"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -40,11 +46,11 @@ async def load_ai_model():
     try:
         if os.path.exists(MODEL_PATH):
             model = FusionNet().to(device)
-            # Load state dict
-            # Note: map_location handles CPU/GPU
             state_dict = torch.load(MODEL_PATH, map_location=device)
             model.load_state_dict(state_dict)
             model.eval()
+            app.state.model = model
+            app.state.device = device
             print(f"✅ AI Model loaded from {MODEL_PATH}")
         else:
             print(f"⚠️ Model file not found at {MODEL_PATH}. Prediction will fail.")
@@ -53,7 +59,7 @@ async def load_ai_model():
 
 @app.get("/")
 def read_root():
-    return {"message": "HyperLeaf AI API is running"}
+    return {"message": "WheatSpectral AI API is running"}
 
 @app.post("/api/predict", response_model=schemas.PredictionResponse)
 async def predict(
@@ -63,109 +69,22 @@ async def predict(
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db)
 ):
-    if model is None:
-        raise HTTPException(status_code=500, detail="AI Model not loaded")
-
-    # 1. Read Image
     try:
-        contents = await file.read()
-        # Create a buffer from bytes
-        # tifffile.imread can read from bytes in recent versions, but sometimes needs BytesIO
-        with io.BytesIO(contents) as bio:
-            image = tifffile.imread(bio).astype(np.float32)
+        image_bytes = await file.read()
+        return await prediction_service.process_prediction(
+            image_bytes=image_bytes,
+            field_area=field_area,
+            fertilizer_rate=fertilizer_rate,
+            user=current_user,
+            db=db,
+            model=model,
+            device=device,
+            filename=file.filename
+        )
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid TIFF file: {e}")
-
-    # Validate Shape
-    if len(image.shape) != 3 or image.shape[0] != 204:
-        # Fallback/Debug: If user uploads something else, we might want to fail
-        # But for robustness, check shape
-        raise HTTPException(status_code=400, detail=f"Image must be [204, 48, 352]. Got {image.shape}")
-
-    # 2. Preprocess & Inference
-    try:
-        input_tensor = preprocess_image(image)
-        input_tensor = input_tensor.to(device)
-
-        with torch.no_grad():
-            logits, reg_pred_norm = model(input_tensor)
-            
-            # Probabilities
-            probs = F.softmax(logits, dim=1)[0].cpu().numpy()
-            
-            # Regression (Denormalize)
-            reg_pred_norm = reg_pred_norm[0].cpu().numpy()
-            # reg_pred = reg_norm * STD + MEAN
-            reg_pred = reg_pred_norm * REG_STD + REG_MEAN
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Inference failed: {e}")
-
-    # 3. Extract Results
-    # Classes: ["Heerup", "Kvium", "Rembrandt", "Sheriff"]
-    best_idx = np.argmax(probs)
-    cultivar_prediction = CULTIVAR_NAMES[best_idx]
-    confidence = float(probs[best_idx])
-
-    # Regression: ["GrainWeight", "Gsw", "PhiPS2", "Fertilizer"]
-    # Provide defaults/clamping if needed, but raw model output is usually fine
-    grain_weight = float(reg_pred[0])
-    gsw = float(reg_pred[1])
-    phips2 = float(reg_pred[2])
-    fertilizer_score = float(reg_pred[3])
-
-    # 4. Farming Calculations
-    
-    # 4a. Total Production (Quintals)
-    # Formula: (mg/plant * 1.2M plants/acre * acres) / 100,000,000
-    PLANT_DENSITY_PER_ACRE = 1_200_000
-    MG_TO_QUINTAL = 100_000_000
-    total_production_quintals = (grain_weight * PLANT_DENSITY_PER_ACRE * field_area) / MG_TO_QUINTAL
-    
-    # 4b. Fertilizer Requirement (Urea kg)
-    # Formula: Linear scaling. Score 0 -> 110 kg/acre. Score 1 -> 0 kg/acre.
-    # Req = (1 - Score) * 110 * field_area
-    # Clip score 0-1 for calculation safety
-    score_clipped = max(0.0, min(1.0, fertilizer_score))
-    BASELINE_UREA_KG_PER_ACRE = 110
-    urea_per_acre = (1 - score_clipped) * BASELINE_UREA_KG_PER_ACRE
-    urea_required_kg = urea_per_acre * field_area
-    
-    # 4c. Fertilizer Cost
-    fertilizer_cost_inr = urea_required_kg * fertilizer_rate
-    
-    # 5. Save to DB
-    fake_image_path = f"uploads/{file.filename}" # In real app, save file to disk
-    
-    prediction = models.Prediction(
-        user_id=current_user.id,
-        image_path=fake_image_path,
-        cultivar_prediction=cultivar_prediction,
-        confidence=confidence,
-        grain_weight=grain_weight,
-        gsw=gsw,
-        phips2=phips2,
-        fertilizer_score=fertilizer_score,
-        field_area_acres=field_area,
-        fertilizer_rate_inr=fertilizer_rate,
-        urea_required_kg=urea_required_kg,
-        fertilizer_cost_inr=fertilizer_cost_inr,
-        total_production_quintals=total_production_quintals
-    )
-    
-    db.add(prediction)
-    db.commit()
-    db.refresh(prediction)
-    
-    # 6. Response
-    response_data = schemas.PredictionResponse.from_orm(prediction).dict()
-    
-    # Add transient spectral data for graph (mean spectrum)
-    # We can calculate it from the real image
-    mean_spectrum = image.mean(axis=(1, 2)).tolist()
-    response_data["spectral_data"] = mean_spectrum
-    response_data["cultivar_probs"] = probs.tolist()
-    
-    return response_data
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/admin/users", response_model=list[schemas.UserResponse])
 def get_all_users(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
@@ -191,28 +110,20 @@ def get_dashboard_data(
     predictions = query.order_by(models.Prediction.created_at.desc()).all()
     
     results = []
-    # Note: For dashboard history, we don't have the spectral data stored in DB
-    # We will send a placeholder or empty list, or user has to accept 
-    # it won't show the graph unless we stored it.
-    # The frontend usually expects it.
     
     for pred in predictions:
         p_dict = schemas.PredictionResponse.from_orm(pred).dict()
         
-        # Create dummy spectral data for display if missing (since we didn't store it)
-        # In a real app we'd store the JSON or file path.
-        # Use a smooth sine wave for visual appeal in history
+        # Create dummy spectral data for display if missing
         x = np.linspace(0, 10, 204)
         p_dict["spectral_data"] = (np.sin(x) + 2).tolist()
         
-        # Reconstruct probs roughly if not stored
-        # Make the predicted class 90% probably
+        # Reconstruct probs
         cultivars = ["Heerup", "Kvium", "Rembrandt", "Sheriff"]
         probs = np.zeros(4)
         if pred.cultivar_prediction in cultivars:
             idx = cultivars.index(pred.cultivar_prediction)
             probs[idx] = pred.confidence if pred.confidence else 0.9
-            # Distribute rest
             remaining = 1.0 - probs[idx]
             for i in range(4):
                 if i != idx:
@@ -223,5 +134,81 @@ def get_dashboard_data(
         
     return results
 
+# --- Market Linkage Endpoints ---
+
+@app.get("/api/market/prices", response_model=list[schemas.MandiPrice])
+def get_market_prices(
+    crop: str = "Wheat", 
+    lat: float | None = None, 
+    lon: float | None = None
+):
+    user_lat = float(lat) if lat is not None else market_service.DEFAULT_USER_LAT
+    user_lon = float(lon) if lon is not None else market_service.DEFAULT_USER_LON
+    
+    return market_service.get_mandi_prices(crop, user_lat, user_lon)
+
+@app.post("/api/market/strategy", response_model=schemas.MarketStrategy)
+def get_market_strategy(
+    prediction_id: int, 
+    lat: float | None = Form(None), 
+    lon: float | None = Form(None),
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    print(f"DEBUG: Market Strategy Request - PredID: {prediction_id}, Lat: {lat}, Lon: {lon}")
+    try:
+        # Fetch prediction
+        prediction = db.query(models.Prediction).filter(models.Prediction.id == prediction_id).first()
+        if not prediction:
+            print(f"DEBUG: Prediction {prediction_id} not found")
+            raise HTTPException(status_code=404, detail="Prediction not found")
+            
+        # Check ownership
+        if prediction.user_id != current_user.id and current_user.role != "admin":
+            print(f"DEBUG: User {current_user.id} not authorized for Prediction {prediction_id}")
+            raise HTTPException(status_code=403, detail="Not authorized to access this prediction")
+            
+        # Use provided lat/lon or default
+        user_lat = float(lat) if lat is not None else market_service.DEFAULT_USER_LAT
+        user_lon = float(lon) if lon is not None else market_service.DEFAULT_USER_LON
+        if user_lat == 0 and user_lon == 0:
+             print("DEBUG: Lat/Lon is 0, using defaults")
+             user_lat = market_service.DEFAULT_USER_LAT
+             user_lon = market_service.DEFAULT_USER_LON
+             
+        print(f"DEBUG: Calculation using user_lat={user_lat}, user_lon={user_lon}")
+        
+        # Calculate Strategy
+        strategy = market_service.calculate_strategy(prediction, user_lat, user_lon)
+        
+        # --- PERSIST DATA TO DB ---
+        print("DEBUG: Saving market strategy to DB...")
+        prediction.recommended_market = strategy.recommended_market
+        prediction.market_price = strategy.recommended_price
+        prediction.transport_cost = strategy.transport_cost
+        prediction.net_profit = strategy.net_profit
+        
+        # Calculate distance to recommended market if valid
+        if strategy.recommended_market and strategy.recommended_market != "None":
+             # We need to find the specific market object from alternatives or re-calculate
+             # Simplify: Check alternatives first
+             for m in strategy.alternative_markets:
+                 if m.market == strategy.recommended_market:
+                     prediction.mandi_distance = m.distance_km
+                     break
+        
+        prediction.market_updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(prediction)
+        print("DEBUG: Market Data Saved Successfully.")
+        
+        return strategy
+    except Exception as e:
+        print(f"DEBUG: Error in get_market_strategy: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
+    # Ensure port 8000
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

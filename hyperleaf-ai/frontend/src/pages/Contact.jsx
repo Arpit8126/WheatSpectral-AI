@@ -7,7 +7,7 @@ const Contact = () => {
             <div className="max-w-2xl mx-auto text-center">
                 <h1 className="text-4xl font-bold mb-6">Get in Touch</h1>
                 <p className="text-muted-foreground mb-12">
-                    Interested in our research or deploying HyperLeaf AI in your agricultural pipeline?
+                    Interested in our research or deploying WheatSpectral AI in your agricultural pipeline?
                 </p>
 
                 <div className="bg-card border border-border rounded-xl p-8 shadow-sm text-left">

@@ -37,7 +37,7 @@ const Navbar = () => {
                         <Wheat className="w-5 h-5 text-primary-foreground" />
                     </div>
                     <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-yellow-600">
-                        HyperLeaf AI
+                        WheatSpectral AI
                     </span>
                 </Link>
 
