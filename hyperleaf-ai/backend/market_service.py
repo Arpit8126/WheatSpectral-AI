@@ -2,15 +2,15 @@
 import random
 import math
 import requests
+import os
 from datetime import datetime
 from typing import List, Dict, Tuple, Optional
 import models
 import schemas
 
 # --- Constants ---
-import os
-AGMARKNET_API_KEY = os.getenv("AGMARKNET_API_KEY", "579b464db66ec23bdd0000018357d1bca9c94d8d65c04a5e7c603f61")
-AGMARKNET_RESOURCE_ID = "9ef84268-d588-465a-a308-a864a43d0070"  # Resource ID for "Current Daily Price of Various Commodities..."
+AGMARKNET_API_KEY = os.getenv("AGMARKNET_API_KEY")
+AGMARKNET_RESOURCE_ID = os.getenv("AGMARKNET_RESOURCE_ID")  # Resource ID for "Current Daily Price of Various Commodities..."
 
 # User provided 2025-26 estimates: ₹0.30 - ₹0.50 for medium loads.
 # We choose ₹0.50 as a safe default for medium trucks.
@@ -130,6 +130,10 @@ def fetch_agmarknet_data(commodity: str = "Wheat") -> List[Dict]:
     Fetches real-time data from Agmarknet API using data.gov.in
     """
     try:
+        if not AGMARKNET_API_KEY:
+            print("AGMARKNET_API_KEY not set. Skipping live API fetch.")
+            return []
+
         url = f"https://api.data.gov.in/resource/{AGMARKNET_RESOURCE_ID}"
         params = {
             "api-key": AGMARKNET_API_KEY,
