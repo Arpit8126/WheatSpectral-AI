@@ -35,14 +35,25 @@ app.include_router(auth.router)
 # Include WhatsApp Router
 # WhatsApp Router removed
 
-# --- Model Loading ---
-MODEL_PATH = "1D+2D CNN + Axial Attention.pt"
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# --- Model Loading & Setup ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "1D+2D CNN + Axial Attention.pt")
+# Default to CPU for maximum stability and speed on cloud free tiers
+device = torch.device(os.getenv("DEVICE", "cpu"))
 model = None
 
 @app.on_event("startup")
-async def load_ai_model():
+async def startup_event():
     global model
+    # 1. Automatically create database tables if they do not exist
+    try:
+        from database import engine
+        models.Base.metadata.create_all(bind=engine)
+        print("✅ Database tables verified/initialized")
+    except Exception as e:
+        print(f"⚠️ Database initialization warning: {e}")
+
+    # 2. Load AI Model
     try:
         if os.path.exists(MODEL_PATH):
             model = FusionNet().to(device)
@@ -51,7 +62,7 @@ async def load_ai_model():
             model.eval()
             app.state.model = model
             app.state.device = device
-            print(f"✅ AI Model loaded from {MODEL_PATH}")
+            print(f"✅ AI Model loaded from {MODEL_PATH} onto {device}")
         else:
             print(f"⚠️ Model file not found at {MODEL_PATH}. Prediction will fail.")
     except Exception as e:
@@ -95,7 +106,7 @@ def get_all_users(current_user: models.User = Depends(auth.get_current_user), db
 
 @app.get("/api/dashboard", response_model=list[schemas.PredictionResponse])
 def get_dashboard_data(
-    user_id: int | None = None, 
+    user_id: str | None = None, 
     current_user: models.User = Depends(auth.get_current_user), 
     db: Session = Depends(get_db)
 ):

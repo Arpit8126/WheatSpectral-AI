@@ -6,10 +6,10 @@ from database import Base
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String, primary_key=True, index=True) # Supabase UUID
     username = Column(String, unique=True, index=True)
     email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
+    hashed_password = Column(String, nullable=True)
     role = Column(String, default="farmer") # 'admin' or 'farmer'
     preferred_language = Column(String, default="en") # 'en' or 'hi'
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -20,7 +20,7 @@ class Prediction(Base):
     __tablename__ = "predictions"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(String, ForeignKey("users.id"))
     
     image_path = Column(String)
     

@@ -20,7 +20,7 @@ class Token(BaseModel):
     token_type: str
 
 class UserResponse(UserBase):
-    id: int
+    id: str
     role: str
     created_at: datetime
     

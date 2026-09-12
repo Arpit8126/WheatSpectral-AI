@@ -4,8 +4,9 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 const Login = () => {
-    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
     const { login } = useAuth();
     const navigate = useNavigate();
     const { t } = useTranslation();
@@ -13,11 +14,23 @@ const Login = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setError('');
+        setLoading(true);
+
         try {
-            await login(username, password);
+            await login(email, password);
             navigate('/dashboard');
         } catch (err) {
-            setError('Invalid credentials');
+            console.error("Login error:", err);
+            if (err.message?.toLowerCase().includes("email not confirmed")) {
+                setError("Email not confirmed. Please enter the verification OTP sent to your email during signup.");
+            } else if (err.message?.toLowerCase().includes("invalid login credentials")) {
+                setError(t('invalid_credentials') || "Invalid email or password.");
+            } else {
+                setError(err.message || 'Login failed. Please try again.');
+            }
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -26,7 +39,6 @@ const Login = () => {
             {/* Left Side - Brand/Image */}
             <div className="hidden lg:flex w-1/2 bg-gray-900 relative items-center justify-center p-12 overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-green-900/40 to-black z-10" />
-                {/* Abstract background elements */}
                 <div className="absolute top-0 left-0 w-full h-full">
                     <div className="absolute top-[-20%] left-[-20%] w-[80%] h-[80%] bg-green-500/10 rounded-full blur-[120px]" />
                 </div>
@@ -57,30 +69,30 @@ const Login = () => {
 
                     {error && (
                         <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm font-medium">
-                            {t('invalid_credentials')}
+                            {error}
                         </div>
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="space-y-2">
-                            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{t('email')}</label>
+                            <label className="text-sm font-medium leading-none">{t('email')}</label>
                             <input
                                 type="email"
-                                className="flex h-12 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                className="flex h-12 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                                 placeholder="name@example.com"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
                                 required
                             />
                         </div>
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{t('password')}</label>
-                                <a href="#" className="text-sm font-medium text-primary hover:text-primary/80">{t('forgot_password')}</a>
+                                <label className="text-sm font-medium leading-none">{t('password')}</label>
                             </div>
                             <input
                                 type="password"
-                                className="flex h-12 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                className="flex h-12 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                placeholder="••••••••"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
@@ -89,9 +101,10 @@ const Login = () => {
 
                         <button
                             type="submit"
-                            className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-12 w-full"
+                            disabled={loading}
+                            className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors bg-primary text-primary-foreground shadow hover:bg-primary/90 h-12 w-full disabled:opacity-50"
                         >
-                            {t('login')}
+                            {loading ? 'Signing in...' : t('login')}
                         </button>
                     </form>
 
